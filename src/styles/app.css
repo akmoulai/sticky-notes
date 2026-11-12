@@ -1,0 +1,335 @@
+:root {
+  --paper: #f4f1ea;
+  --paper-dot: #d9d3c5;
+  --ink: #3a3528;
+  --ink-muted: #8a836f;
+  --line: #ddd6c6;
+  --raised: #fff;
+  --raised-shadow: 0 2px 10px rgb(0 0 0 / 18%);
+  --focus-ring: rgb(74 116 196 / 45%);
+
+  --note-yellow: #fde68a;
+  --note-pink: #fbcfe8;
+  --note-blue: #bfdbfe;
+  --note-green: #bbf7d0;
+  --note-shadow: 0 2px 5px rgb(0 0 0 / 18%);
+  --note-selected-line: #6b6453;
+  --note-grip-line: rgb(0 0 0 / 30%);
+
+  --trash-line: #c9c2b2;
+  --trash-armed-line: #8a836f;
+  --trash-hot: #fbe7df;
+  --trash-hot-line: #dfa894;
+  --trash-hot-ink: #9b4c35;
+
+  --tint-transition: 150ms ease-out;
+
+  color: var(--ink);
+  font:
+    14px / 1.4 system-ui,
+    sans-serif;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Only the board scrolls, never the page. */
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+[data-color='yellow'] {
+  --note-color: var(--note-yellow);
+}
+[data-color='pink'] {
+  --note-color: var(--note-pink);
+}
+[data-color='blue'] {
+  --note-color: var(--note-blue);
+}
+[data-color='green'] {
+  --note-color: var(--note-green);
+}
+
+/* Board */
+
+.board {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  /* Own stacking context: however high note z-indexes climb, they stay below the dock. */
+  isolation: isolate;
+  user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.board-message {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* Out of flow, so nothing shifts as it comes and goes; presses reach the board beneath. */
+.board-hint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Inline width/height reach the furthest note; the minimums fill the viewport. */
+.surface {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+  background-image: radial-gradient(var(--paper-dot) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* No z-index here: the preview must stack among, and above, the notes. */
+.draw-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.draw-preview {
+  position: absolute;
+  /* A new note is created on top, so its preview is drawn above every note. */
+  z-index: 2147483647;
+  border: 2px dashed var(--ink-muted);
+  border-radius: 2px;
+  background-color: rgb(58 53 40 / 6%);
+  pointer-events: none;
+  transition:
+    border-color var(--tint-transition),
+    background-color var(--tint-transition);
+}
+
+/* Too small to become a note: releasing now creates nothing. */
+.draw-preview[data-valid='false'] {
+  border-color: var(--trash-line);
+  background-color: transparent;
+}
+
+.draw-size {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Notes: siblings of the draw layer, placed by transform from the surface origin.
+   Only colour and opacity transition; position and size follow the pointer exactly. */
+
+.note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  padding: 8px;
+  border-radius: 2px;
+  background-color: var(--note-color);
+  box-shadow: var(--note-shadow);
+  cursor: grab;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background-color var(--tint-transition),
+    outline-color var(--tint-transition),
+    opacity var(--tint-transition);
+}
+
+.note:active {
+  cursor: grabbing;
+}
+
+.note[data-selected='true'] {
+  outline-color: var(--note-selected-line);
+}
+
+/* Over the trash: releasing deletes it. */
+.note[data-over-trash='true'] {
+  opacity: 0.45;
+}
+
+/* The text and its editor share one box model, so editing never shifts the text. */
+.note-text,
+.note-editor {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+}
+
+.note-editor {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: none;
+  cursor: text;
+  user-select: text;
+}
+
+.note-editor::placeholder {
+  color: var(--ink-muted);
+}
+
+.note-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+.note-grip::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--note-grip-line);
+  border-bottom: 2px solid var(--note-grip-line);
+}
+
+/* Dock: fixed to the viewport, clear of the board's scrollbars. */
+
+.dock {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 24px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  margin-inline: auto;
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
+}
+
+.dock-swatches {
+  display: flex;
+  gap: 10px;
+  /* Reset the fieldset defaults. */
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 15%);
+  border-radius: 50%;
+  background: var(--note-color);
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    outline-color var(--tint-transition),
+    box-shadow var(--tint-transition);
+}
+
+.swatch:hover {
+  outline-color: var(--line);
+}
+
+.swatch[aria-pressed='true'] {
+  outline-color: var(--ink);
+}
+
+/* A halo outside the pressed ring, so focus and selection read together. */
+.swatch:focus-visible {
+  box-shadow: 0 0 0 6px var(--focus-ring);
+}
+
+.dock-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+}
+
+/* Fixed size in every state: only colours change. */
+.trash {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 36px;
+  border: 1.5px dashed var(--trash-line);
+  border-radius: 18px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  transition:
+    background-color var(--tint-transition),
+    border-color var(--tint-transition),
+    color var(--tint-transition);
+}
+
+.trash[data-state='armed'] {
+  border-color: var(--trash-armed-line);
+  color: var(--ink);
+}
+
+.trash[data-state='hot'] {
+  border-color: var(--trash-hot-line);
+  background-color: var(--trash-hot);
+  color: var(--trash-hot-ink);
+}
+
+/* Save status: never intercepts a press, so drawing can start beneath it. */
+
+.save-status {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 80%);
+  color: var(--ink-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* All labels share one cell, so the widest sets the width whichever is shown. */
+.save-status > * {
+  grid-area: 1 / 1;
+}
+
+.save-status-sizer {
+  visibility: hidden;
+}
